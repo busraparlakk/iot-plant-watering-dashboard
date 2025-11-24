@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Bitki Sulama Paneli</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root {
+      --bg: #f5f5ff;
+      --card: #ffffff;
+      --accent: #7c83fd;
+      --accent-soft: #e3e5ff;
+      --danger: #ff6b6b;
+      --ok: #4caf50;
+      --text: #333;
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at top, #e0f7fa, var(--bg));
+    }
+
+    .card {
+      background: var(--card);
+      padding: 24px;
+      border-radius: 20px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+      max-width: 400px;
+      width: 90%;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: "";
+      position: absolute;
+      width: 200px;
+      height: 200px;
+      background: var(--accent-soft);
+      border-radius: 50%;
+      top: -80px;
+      right: -80px;
+      opacity: 0.6;
+      z-index: -1;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.4rem;
+      color: var(--text);
+    }
+
+    .subtitle {
+      font-size: 0.9rem;
+      color: #777;
+      margin-bottom: 24px;
+    }
+
+    .gauge {
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      margin: 0 auto 12px;
+      background: conic-gradient(
+        var(--accent) var(--gauge, 50%),
+        #e0e0e0 0
+      );
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      transition: background 0.4s ease;
+    }
+
+    .gauge-inner {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+    }
+
+    .gauge-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .gauge-label {
+      font-size: 0.8rem;
+      color: #777;
+    }
+
+    .plant {
+      margin-top: 12px;
+      font-size: 3rem;
+      animation: float 3s ease-in-out infinite;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      margin-top: 8px;
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .status-badge.danger {
+      background: #ffe3e3;
+      color: var(--danger);
+    }
+
+    .status-badge.danger .status-dot {
+      background: var(--danger);
+    }
+
+    .timestamp {
+      margin-top: 10px;
+      font-size: 0.75rem;
+      color: #999;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
+    }
+
+    .pump-btn {
+      margin-top: 15px;
+      padding: 10px 18px;
+      border: none;
+      border-radius: 999px;
+      background: var(--accent);
+      color: white;
+      font-size: 0.9rem;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      transition: 0.2s;
+    }
+
+    .pump-btn:hover {
+      opacity: 0.9;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Bitki Sulama Paneli 🌱</h1>
+    <div class="subtitle">ESP32 & Firebase – Canlı Nem Takibi</div>
+    
+    <!-- Kullanıcı info & Çıkış -->
+    <div style="font-size: 0.8rem; color:#666; margin-bottom:10px;">
+      <span id="userInfo">Misafir kullanıcı</span>
+      ·
+      <button id="logoutBtn" style="
+        border:none;
+        background:none;
+        color:#7c83fd;
+        cursor:pointer;
+        font-size:0.8rem;
+        text-decoration:underline;
+      ">
+        Çıkış yap
+      </button>
+    </div>
+    <div class="gauge" id="gauge">
+      <div class="gauge-inner">
+        <div class="gauge-value" id="moistureValue">--%</div>
+        <div class="gauge-label">Toprak nemi</div>
+      </div>
+    </div>
+
+    <div class="plant" id="plantEmoji">🌿</div>
+
+    <div class="status-badge" id="statusBadge">
+      <div class="status-dot"></div>
+      <span id="statusText">Veri bekleniyor...</span>
+    </div>
+
+    <!-- 🔵 SULAMA KONTROL BUTONU -->
+    <button id="pumpToggle" class="pump-btn">Sulamayı Aç</button>
+
+    <div class="timestamp" id="timestampText">Son güncelleme: -</div>
+  </div>
+
+   <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+    import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-database.js";
+    import {
+      getAuth,
+      onAuthStateChanged,
+      signOut
+    } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
+
+    // Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyCBUqM6Zb5BgwsXVETMAPKQCF-y4bFOL4s",
+      authDomain: "iot-flower-cf0dd.firebaseapp.com",
+      databaseURL: "https://iot-flower-cf0dd-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "iot-flower-cf0dd",
+      storageBucket: "iot-flower-cf0dd.firebasestorage.app",
+      messagingSenderId: "57681288842",
+      appId: "1:57681288842:web:aa60fb392f680ca49e1773",
+      measurementId: "G-D2BTKP74M9"
+    };
+
+    // 🔹 Uygulama nesneleri
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);          // (3. adım) Auth nesnesi
+    const db = getDatabase(app);
+
+    // 🔹 Auth guard (4. adım) – giriş yoksa login sayfasına at
+    onAuthStateChanged(auth, (user) => {
+      const userInfo = document.getElementById("userInfo");
+
+      if (!user) {
+        // Oturum yok → login ekranına yönlendir
+        window.location.href = "./auth/login.html";
+        return;
+      }
+
+      // Oturum varsa ekranda ismini/e-postasını göster
+      const name = user.displayName || user.email;
+      userInfo.textContent = `Hoş geldin, ${name}`;
+    });
+
+    // 🔹 Firebase referansları
+    const plantRef = ref(db, "plant");
+    const pumpRef = ref(db, "controls/pump");
+
+    // 🔹 HTML elemanları
+    const gauge = document.getElementById("gauge");
+    const moistureValueEl = document.getElementById("moistureValue");
+    const plantEmojiEl = document.getElementById("plantEmoji");
+    const statusBadge = document.getElementById("statusBadge");
+    const statusText = document.getElementById("statusText");
+    const timestampText = document.getElementById("timestampText");
+    const pumpButton = document.getElementById("pumpToggle");
+    const logoutBtn = document.getElementById("logoutBtn");   // (5. adım için)
+    
+    let pumpState = false;
+
+    function setGauge(percent) {
+      const clamped = Math.max(0, Math.min(100, percent));
+      gauge.style.setProperty("--gauge", clamped + "%");
+      moistureValueEl.textContent = clamped + "%";
+    }
+
+    function formatTime(ms) {
+      if (!ms) return "-";
+      const date = new Date(ms);
+      return date.toLocaleTimeString("tr-TR");
+    }
+
+    // 🔹 Pump kontrolünü Firebase'ten dinle
+    onValue(pumpRef, (snapshot) => {
+      const val = snapshot.val();
+      pumpState = !!val;
+      pumpButton.textContent = pumpState ? "Sulamayı Kapat" : "Sulamayı Aç";
+    });
+
+    // 🔹 Pump butonuna tıklayınca Firebase'e yaz
+    pumpButton.addEventListener("click", async () => {
+      await set(pumpRef, !pumpState);
+    });
+
+    // 🔹 Çıkış butonu (5. adım) – signOut
+    logoutBtn.addEventListener("click", async () => {
+      await signOut(auth);
+      window.location.href = "./auth/login.html";
+    });
+
+    // 🔹 Bitki verilerini dinle
+    onValue(plantRef, (snapshot) => {
+      const data = snapshot.val();
+      if (!data) {
+        statusText.textContent = "Veri bulunamadı";
+        return;
+      }
+
+      const moisture = data.moisture ?? 0;
+      const autoWater = !!data.autoWater;
+      const pumpOn = !!data.pumpOn;
+      const ts = data.timestamp ?? null;
+
+      setGauge(moisture);
+
+      let baseText = "";
+      if (moisture < 30) {
+        plantEmojiEl.textContent = "🥀";
+        statusBadge.classList.add("danger");
+        baseText = "Toprak çok kuru – sulama lazım!";
+      } else if (moisture < 60) {
+        plantEmojiEl.textContent = "🌿";
+        statusBadge.classList.remove("danger");
+        baseText = "Gayet iyi gidiyor 🌱";
+      } else {
+        plantEmojiEl.textContent = "🌳";
+        statusBadge.classList.remove("danger");
+        baseText = "Toprak nemli, keyfi yerinde!";
+      }
+
+      const autoText = autoWater ? "Oto sulama: AÇIK" : "Oto sulama: KAPALI";
+      const pumpText = pumpOn ? "Pompa: AÇIK" : "Pompa: KAPALI";
+
+      statusText.textContent = `${baseText} (${autoText} • ${pumpText})`;
+      timestampText.textContent = "Son güncelleme: " + formatTime(ts);
+    });
+  </script>
+</body>
+</html>

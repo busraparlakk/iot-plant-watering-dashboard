@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Kayıt Ol - Bitki Sulama Paneli</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root {
+      --bg: #f5f5ff;
+      --card: #ffffff;
+      --accent: #7c83fd;
+      --accent-soft: #e3e5ff;
+      --danger: #ff6b6b;
+      --text: #333;
+    }
+    * {
+      box-sizing: border-box;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at top, #e0f7fa, var(--bg));
+    }
+    .card {
+      background: var(--card);
+      padding: 24px;
+      border-radius: 20px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+      max-width: 380px;
+      width: 90%;
+      text-align: center;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.3rem;
+      color: var(--text);
+    }
+    .subtitle {
+      font-size: 0.85rem;
+      color: #777;
+      margin-bottom: 20px;
+    }
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      text-align: left;
+    }
+    label {
+      font-size: 0.8rem;
+      color: #555;
+    }
+    input {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid #ddd;
+      font-size: 0.9rem;
+    }
+    button {
+      margin-top: 8px;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 999px;
+      background: var(--accent);
+      color: white;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    button:hover { opacity: 0.95; }
+    .message {
+      margin-top: 10px;
+      font-size: 0.8rem;
+      min-height: 18px;
+    }
+    .message.error { color: var(--danger); }
+    .message.success { color: #2e7d32; }
+    .links {
+      margin-top: 14px;
+      font-size: 0.8rem;
+    }
+    .links a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Hesap Oluştur 🌱</h1>
+    <div class="subtitle">Bitki sulama paneline kayıt ol</div>
+
+    <form id="registerForm">
+      <div>
+        <label for="name">Ad Soyad</label>
+        <input id="name" type="text" required />
+      </div>
+      <div>
+        <label for="email">E-posta</label>
+        <input id="email" type="email" required />
+      </div>
+      <div>
+        <label for="password">Şifre</label>
+        <input id="password" type="password" required minlength="6" />
+      </div>
+      <div>
+        <label for="password2">Şifre (tekrar)</label>
+        <input id="password2" type="password" required minlength="6" />
+      </div>
+      <button type="submit">Kayıt Ol</button>
+    </form>
+
+    <div id="message" class="message"></div>
+
+    <div class="links">
+      Zaten hesabın var mı? <a href="login.html">Giriş yap</a>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+    import {
+      getAuth,
+      createUserWithEmailAndPassword,
+      updateProfile,
+      sendEmailVerification,
+    } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
+    import {
+      getDatabase,
+      ref,
+      set,
+    } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCBUqM6Zb5BgwsXVETMAPKQCF-y4bFOL4s",
+      authDomain: "iot-flower-cf0dd.firebaseapp.com",
+      databaseURL: "https://iot-flower-cf0dd-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "iot-flower-cf0dd",
+      storageBucket: "iot-flower-cf0dd.firebasestorage.app",
+      messagingSenderId: "57681288842",
+      appId: "1:57681288842:web:aa60fb392f680ca49e1773",
+      measurementId: "G-D2BTKP74M9"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getDatabase(app);
+
+    const form = document.getElementById("registerForm");
+    const msgEl = document.getElementById("message");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      msgEl.textContent = "";
+      msgEl.className = "message";
+
+      const name = document.getElementById("name").value.trim();
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+      const password2 = document.getElementById("password2").value;
+
+      if (password !== password2) {
+        msgEl.textContent = "Şifreler uyuşmuyor.";
+        msgEl.classList.add("error");
+        return;
+      }
+
+      try {
+        const cred = await createUserWithEmailAndPassword(auth, email, password);
+
+        // Profilde isim tut
+        await updateProfile(cred.user, { displayName: name });
+
+        // Kullanıcıyı veritabanına yaz
+        await set(ref(db, "users/" + cred.user.uid), {
+          name,
+          email,
+          createdAt: Date.now()
+        });
+
+        // E-posta doğrulama gönder
+        await sendEmailVerification(cred.user);
+
+        msgEl.textContent = "Kayıt başarılı! Lütfen e-postanı kontrol edip hesabını doğrula.";
+        msgEl.classList.add("success");
+
+      } catch (err) {
+        console.error(err);
+        msgEl.textContent = err.message || "Bir hata oluştu.";
+        msgEl.classList.add("error");
+      }
+    });
+  </script>
+</body>
+</html>
